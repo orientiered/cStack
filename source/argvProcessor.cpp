@@ -2,12 +2,14 @@
 #include <stdlib.h>
 #include <stdbool.h>
 //#define DEBUG_PRINTS
-#include "mystring.h"
+#include <string.h>
 #include "error_debug.h"
 #include "logger.h"
 #include "argvProcessor.h"
-#include "utils.h"
 
+#ifndef FREE
+#define FREE(ptr) do {free(ptr); ptr = NULL;} while (0)
+#endif
 /*!
     @brief Scans argument in full form (--encode)
 
@@ -52,6 +54,11 @@ static int scanToFlag(flagDescriptor_t desc, FlagsHolder_t *flags, int remainToS
 
 static flagVal_t *findFlag(FlagsHolder_t flags, const char *flagName);
 static enum status addFlag(FlagsHolder_t *flags, flagDescriptor desc, fVal_t val);
+
+/*
+    @brief concatenate strings with given separator string
+*/
+static char* joinStrings(const char **strings, size_t len, const char *separator);
 
 enum status processArgs(FlagDescHolder_t desc, FlagsHolder_t *flags, int argc, const char *argv[]) {
     flags->flags = (flagVal_t*) calloc (FLAGS_RESERVED, sizeof(flagVal_t));
@@ -203,4 +210,24 @@ void deleteFlags(FlagsHolder_t *flags) {
             FREE(flags->flags[index].val.string_);
     }
     FREE(flags->flags);
+}
+
+static char* joinStrings(const char **strings, size_t len, const char *separator) {
+    size_t fullLen = 0;
+    for (size_t idx = 0; idx < len; idx++)
+        fullLen += strlen(strings[idx]);
+    fullLen += strlen(separator) * (len-1);
+    fullLen += 1;
+    char *joined = (char*) calloc(fullLen, sizeof(char));
+    char *writePtr = joined;
+    for (size_t idx = 0; idx < (len - 1); idx++) {
+        for (const char *strPtr = strings[idx]; *strPtr; strPtr++)
+            *writePtr++ = *strPtr;
+        for (const char *sepPtr = separator; *sepPtr; sepPtr++)
+            *writePtr++ = *sepPtr;
+    }
+    for (const char *strPtr = strings[len-1]; *strPtr; strPtr++)
+            *writePtr++ = *strPtr;
+    *writePtr = '\0';
+    return joined;
 }

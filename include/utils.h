@@ -3,7 +3,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#define FREE(p) {free(p); p = NULL;}
+#define FREE(ptr) do {free(ptr); ptr = NULL;} while (0)
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof(*array))
 
 typedef struct doublePair {
@@ -32,9 +32,11 @@ long long minINT(long long a, long long b);
 void swap(void* a, void* b, size_t len);
 void swapByByte(void* a, void* b, size_t len);
 
-void memcpy(void* copyTo, void* copyFrom, size_t length);
-void memcpyByByte(void* copyTo, void* copyFrom, size_t length);
+void memValSet(void *start, const void *elem, size_t elemSize, size_t length);
 
 doublePair_t runningSTD(double value, int getResult);
+
+
+uint64_t memHash(const void *arr, size_t len);
 
 #endif

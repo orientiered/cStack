@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "error_debug.h"
 #include "logger.h"
@@ -8,7 +9,8 @@
 int main() {
     logOpen();
     setLogLevel(L_EXTRA);
-    Stack_t stk = stackCtor(10);
+    Stack_t stk = {};
+    stackCtor(&stk, 0);
     stackPush(&stk, 100);
     stackPush(&stk, 200);
     for (int i = 0; i < 100; i++) {

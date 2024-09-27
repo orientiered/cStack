@@ -13,6 +13,7 @@ enum status logClose();
 
 void setLogLevel(enum LogLevel level);
 
+enum status logPrintWithTime(enum LogLevel level, bool copyToStderr, const char* fmt, ...);
 enum status logPrint(enum LogLevel level, bool copyToStderr, const char* fmt, ...);
 
 #define LOG_PRINT(level, ...)                                                                       \

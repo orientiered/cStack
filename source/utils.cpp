@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <stdint.h>
+#include <string.h>
 #include "utils.h"
 
 long long maxINT(long long a, long long b) {
@@ -13,19 +15,19 @@ long long minINT(long long a, long long b) {
 
 void swap(void* a, void* b, size_t len) {
     //checking if a and b are correctly aligned
-    if ((((size_t) a) % 8) != (((size_t) b) % 8)) { //TODO: sizeof(long long/uint64_t)
+    const unsigned blockSize = sizeof(uint64_t);
+    if ((((size_t) a) % blockSize != (((size_t) b) % blockSize))) { //TODO: sizeof(long long/uint64_t)
         swapByByte(a, b, len);
         return;
     }
     //aligning a and b if possible
-    const unsigned blockSize = sizeof(long long); //TODO:uint64_t instead of long long
-    const unsigned startOffset = (blockSize - ((size_t) a % 8)) % 8;
+    const unsigned startOffset = (blockSize - ((size_t) a % blockSize)) % blockSize;
     swapByByte(a, b, startOffset);
 
-    size_t llSteps = (len-startOffset) / sizeof(long long);
+    size_t llSteps = (len-startOffset) / blockSize;
     //swapping every 8 bytes
-    long long *lla = (long long*) ((size_t)a + startOffset), *llb = (long long*) ((size_t)b + startOffset);
-    long long temp = 0;
+    uint64_t *lla = (uint64_t*) ((size_t)a + startOffset), *llb = (uint64_t*) ((size_t)b + startOffset);
+    uint64_t temp = 0;
 
     while (llSteps--) {
         temp = *lla;
@@ -33,7 +35,7 @@ void swap(void* a, void* b, size_t len) {
         *llb++ = temp;
     }
 
-    swapByByte(lla, llb, (len-startOffset) % 8);
+    swapByByte(lla, llb, (len-startOffset) % blockSize);
 }
 
 void swapByByte(void* a, void* b, size_t len) {
@@ -44,33 +46,6 @@ void swapByByte(void* a, void* b, size_t len) {
         *ac++ = *bc;
         *bc++ = c;
     }
-}
-
-
-void memcpy(void* copyTo, void* copyFrom, size_t length) {
-    //checking if to and from are correctly aligned
-    if (((size_t)copyTo % 8) != ((size_t)copyFrom % 8)) {
-        memcpyByByte(copyTo, copyFrom, length);
-        return;
-    }
-    //aligning to and from if possible
-    const unsigned blockSize = sizeof(long long);
-    const unsigned startOffset = (blockSize - ((size_t) copyTo % 8)) % 8;
-    memcpyByByte(copyTo, copyFrom, startOffset);
-
-    size_t llSteps = (length-startOffset) / sizeof(long long);
-    //copying every 8 bytes
-    long long   *llTo   = (long long*) ((size_t)copyTo    + startOffset),
-                *llFrom = (long long*) ((size_t)copyFrom  + startOffset);
-
-    while (llSteps--) *llTo++ = *llFrom++;
-
-    memcpyByByte(llTo, llFrom, (length-startOffset) % 8);
-}
-
-void memcpyByByte(void *copyTo, void* copyFrom, size_t length) {
-    char *to = (char*)copyTo, *from = (char*)copyFrom;
-    while (length--) *to++ = *from++;
 }
 
 doublePair_t runningSTD(double value, int getResult) {
@@ -99,4 +74,21 @@ doublePair_t runningSTD(double value, int getResult) {
         totalValue = totalSqrValue = 0;
     }
     return result;
+}
+
+void memValSet(void *start, const void *elem, size_t elemSize, size_t length) {
+    char *ptr = (char*) start;
+    const char *elemPtr = (const char*) elem;
+    while (length--) {
+        memcpy(ptr, elemPtr, elemSize);
+        ptr += elemSize;
+    }
+}
+uint64_t memHash(const void *arr, size_t len) {
+    uint64_t hash = 5381;
+    const unsigned char *carr = (const unsigned char*)arr;
+    while (len--)
+        hash = ((hash << 5) + hash) + *carr++;
+        //hash = 33*hash + c
+    return hash;
 }

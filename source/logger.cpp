@@ -34,7 +34,6 @@ enum status logOpen() {
     setbuf(logFile, NULL); //disabling buffering
 
     fprintf(logFile, "------------------------------------------\n");
-    struct tm curTime = getTime();
     logTime();
     fprintf(logFile, "Starting logging session\n");
 
@@ -58,7 +57,7 @@ void setLogLevel(enum LogLevel level) {
     globalLogLevel = level;
 }
 
-enum status logPrint(enum LogLevel level, bool copyToStderr, const char* fmt, ...) {
+enum status logPrintWithTime(enum LogLevel level, bool copyToStderr, const char* fmt, ...) {
     MY_ASSERT(logFile, abort());
     if (level > globalLogLevel)
         return SUCCESS;
@@ -76,3 +75,22 @@ enum status logPrint(enum LogLevel level, bool copyToStderr, const char* fmt, ..
     va_end(args);
     return SUCCESS;
 }
+
+enum status logPrint(enum LogLevel level, bool copyToStderr, const char* fmt, ...) {
+    MY_ASSERT(logFile, abort());
+    if (level > globalLogLevel)
+        return SUCCESS;
+
+    va_list args;
+
+    if (copyToStderr) {
+        va_start(args, fmt);
+        vfprintf(stderr, fmt, args);
+    }
+    va_start(args, fmt);
+    vfprintf(logFile, fmt, args);
+
+    va_end(args);
+    return SUCCESS;
+}
+

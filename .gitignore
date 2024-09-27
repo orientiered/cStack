@@ -1,5 +1,6 @@
 .vscode/
 build/
+logs/
 main.exe
 main
 log.txt
