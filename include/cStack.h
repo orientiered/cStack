@@ -96,12 +96,13 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
 
 //TODO: maybe do not abort
 #ifndef NDEBUG
-# define STACK_ASSERT(stk)              \
-    do {                                \
-        if (!stackOk(stk)) {            \
-            stackDump(stk);             \
-            MY_ASSERT(0, abort());      \
-        }                               \
+# define STACK_ASSERT(stk)                                                                          \
+    do {                                                                                            \
+        if (!stackOk(stk)) {                                                                        \
+            logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackErrorToStr(stk->err));   \
+            stackDump(stk);                                                                         \
+            MY_ASSERT(0, abort());                                                                  \
+        }                                                                                           \
     } while (0)
 #else
 # define STACK_ASSERT(stk)

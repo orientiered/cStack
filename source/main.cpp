@@ -8,14 +8,16 @@
 
 int main() {
     logOpen();
-    setLogLevel(L_EXTRA);
+    setLogLevel(L_DEBUG);
     Stack_t stk = {};
     stackCtor(&stk, 0);
     stackPush(&stk, 100);
     stackPush(&stk, 200);
+    //stk.data[1] = 5;
     for (int i = 0; i < 100; i++) {
         stackPush(&stk, 5*i);
     }
+    ((char*)stk.data)[-3] = 25;
     for (int i = 0; i < 100; i++) {
         stackPop(&stk);
     }
