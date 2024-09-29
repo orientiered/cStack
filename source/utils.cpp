@@ -85,6 +85,7 @@ void memValSet(void *start, const void *elem, size_t elemSize, size_t length) {
     }
 }
 uint64_t memHash(const void *arr, size_t len) {
+    if (!arr) return 0x1DED0BED;
     uint64_t hash = 5381;
     const unsigned char *carr = (const unsigned char*)arr;
     while (len--)

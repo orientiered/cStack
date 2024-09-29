@@ -6,23 +6,44 @@
 #include "logger.h"
 #include "cStack.h"
 
+void test1();
+void test2();
+
 int main() {
     logOpen();
-    setLogLevel(L_DEBUG);
+    setLogLevel(L_EXTRA);
+    test1();
+    test2();
+    logClose();
+}
+
+void test1() {
     Stack_t stk = {};
-    stackCtor(&stk, 0);
+    stackCtor(&stk, 1);
     stackPush(&stk, 100);
     stackPush(&stk, 200);
     //stk.data[1] = 5;
     for (int i = 0; i < 100; i++) {
         stackPush(&stk, 5*i);
     }
-    ((char*)stk.data)[-3] = 25;
     for (int i = 0; i < 100; i++) {
         stackPop(&stk);
+        if (i == 47) stackDump(&stk);
     }
-    logPrint(L_ZERO, 1, "Val: %lf\n", stackPop(&stk));
-    logPrint(L_ZERO, 1, "Val: %lf\n", stackPop(&stk));
+    logPrint(L_ZERO, 1, "Val: %d\n", stackPop(&stk));
+    logPrint(L_ZERO, 1, "Val: %d\n", stackPop(&stk));
     stackDtor(&stk);
-    logClose();
+}
+
+void test2() {
+    Stack_t *stks = (Stack_t*) calloc(100, sizeof(Stack_t));
+    for (int i = 0; i < 100; i++)
+        stackCtor(&stks[i], i);
+
+    for (int i = 0; i < 100; i++)
+        stackPush(&stks[i], i+0.1235);
+
+    for (int i = 0; i < 100; i++)
+        stackDtor(&stks[i]);
+    free(stks);
 }
