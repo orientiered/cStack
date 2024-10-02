@@ -6,7 +6,7 @@
 
 /*------------------STRUCTS DEFINITIONS---------------------------------------*/
 
-const size_t FLAGS_RESERVED = 10;   ///< maximum amount of flags
+const size_t MAX_REGISTERED_FLAGS = 50;   ///< maximum amount of flags
 
 /// @brief Available types for cmd args
 enum flagType {
@@ -44,37 +44,40 @@ typedef struct FlagsHolder {
     size_t reserved;        ///< Maximum number of flags
 } FlagsHolder_t;
 
-/// @brief Store flag descriptions
-typedef struct FlagDescHolder {
-    flagDescriptor_t *args; ///< Array with flag descriptions
-    size_t size;            ///< Size of array
-} FlagDescHolder_t;
-
 /*------------------FUNCTIONS TO PARSE CMD ARGUMENTS--------------------------*/
-//TODO: maybe flags should be static instance
-//TODO: this will reduce amount of arguments in functions and make code simpler and safer
+
+
+/// @brief Set header of help message
+enum status setHelpMessageHeader(const char* header);
+
+/*!
+    @brief register cmd argument flag
+*/
+enum status registerFlag(enum flagType type,
+                         const char* shortName,
+                         const char* fullName,
+                         const char* helpMessage);
 /*!
     @brief Parse cmd args
 
     @return SUCCESS if parsed correctly, ERROR otherwise
-
 */
-enum status processArgs(FlagDescHolder_t desc, FlagsHolder_t *flags, int argc, const char *argv[]);
+enum status processArgs(int argc, const char *argv[]);
 
 /*!
     @brief Prints help message containing descriptions of all flags
 
     Prints all argHelps in args array
 */
-void printHelpMessage(FlagDescHolder_t desc);
+void printHelpMessage();
 
 /// @brief Check if flag with given name is set
-bool isFlagSet(const FlagsHolder_t flags, const char *flagName);
+bool isFlagSet(const char *flagName);
 
 /// @brief Get value of flag with given name
-fVal_t getFlagValue(const FlagsHolder_t flags, const char *flagName);
+fVal_t getFlagValue(const char *flagName);
 
 /// @brief Delete flags
-void deleteFlags(FlagsHolder_t *flags);
+void deleteFlags();
 
 #endif

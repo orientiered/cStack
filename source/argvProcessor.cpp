@@ -10,10 +10,15 @@
 #ifndef FREE
 #define FREE(ptr) do {free(ptr); ptr = NULL;} while (0)
 #endif
-/*!
-    @brief Scans argument in full form (--encode)
 
-    @param flags [out] Array with flags
+static flagDescriptor_t flagsDescriptions[MAX_REGISTERED_FLAGS] = {};
+static size_t registeredFlagsCount_ = 0;
+static FlagsHolder_t flags = {};
+static const char* helpMessageHeader_ = NULL;
+
+/*!
+    @brief Scan argument in full form (--encode)
+
     @param remainToScan [in] Number of arguments that were'nt already scanned
     @param argv [in] Current argv position
 
@@ -21,12 +26,11 @@
 
     Counts current argument as processed only after next argument was processed by scanToFlag() function
 */
-static int scanFullArgument(FlagDescHolder_t desc, FlagsHolder_t *flags, int remainToScan, const char *argv[]);
+static int scanFullArgument(int remainToScan, const char *argv[]);
 
 /*!
-    @brief Scans argument in short form (-eio)
+    @brief Scan argument in short form (-eio)
 
-    @param flags [out] Array with flags
     @param remainToScan [in] Number of arguments that weren't already scanned
     @param argv [in] Current argv position
 
@@ -35,7 +39,7 @@ static int scanFullArgument(FlagDescHolder_t desc, FlagsHolder_t *flags, int rem
     Counts current argument as processed only after all next argument were processed by scanToFlag() function
 
 */
-static int scanShortArguments(FlagDescHolder_t desc, FlagsHolder_t *flags, int remainToScan, const char *argv[]);
+static int scanShortArguments(int remainToScan, const char *argv[]);
 
 /*!
     @brief Scan value to flag
@@ -50,23 +54,48 @@ static int scanShortArguments(FlagDescHolder_t desc, FlagsHolder_t *flags, int r
 
     argv must point to value, that should be scanned to flag
 */
-static int scanToFlag(flagDescriptor_t desc, FlagsHolder_t *flags, int remainToScan, const char *argv[]);
+static int scanToFlag(flagDescriptor_t desc, int remainToScan, const char *argv[]);
 
-static flagVal_t *findFlag(FlagsHolder_t flags, const char *flagName);
-static enum status addFlag(FlagsHolder_t *flags, flagDescriptor desc, fVal_t val);
+static flagVal_t *findFlag(const char *flagName);
+static enum status addFlag(flagDescriptor_t desc, fVal_t val);
 
 /*
     @brief concatenate strings with given separator string
 */
 static char* joinStrings(const char **strings, size_t len, const char *separator);
 
-enum status processArgs(FlagDescHolder_t desc, FlagsHolder_t *flags, int argc, const char *argv[]) {
-    flags->flags = (flagVal_t*) calloc (FLAGS_RESERVED, sizeof(flagVal_t));
-    if (!flags->flags) {
+enum status setHelpMessageHeader(const char* header) {
+    helpMessageHeader_ = header;
+    return SUCCESS;
+}
+
+enum status registerFlag(enum flagType type,
+                         const char* shortName,
+                         const char* fullName,
+                         const char* helpMessage) {
+    flagDescriptor_t flagInfo = {type, shortName, fullName, helpMessage};
+    if (registeredFlagsCount_ < MAX_REGISTERED_FLAGS) {
+        flagsDescriptions[registeredFlagsCount_++] = flagInfo;
+        return SUCCESS;
+    } else
+        return ERROR;
+}
+
+enum status processArgs(int argc, const char *argv[]) {
+    static bool isProcessed = false;
+    if (isProcessed) {
+        logPrint(L_ZERO, 1, "Multiple argv processing is forbidden\n");
+        return ERROR;
+    }
+    isProcessed = true;
+
+    flags.flags = (flagVal_t*) calloc (registeredFlagsCount_, sizeof(flagVal_t));
+
+    if (!flags.flags) {
         LOG_PRINT(L_DEBUG, 0, "Memory allocation failed\n");
         return ERROR;
     }
-    flags->reserved = FLAGS_RESERVED;
+    flags.reserved = registeredFlagsCount_;
 
     for (int i = 1; i < argc;) {
         if (argv[i][0] != '-')  {   //all arguments start with -
@@ -76,12 +105,12 @@ enum status processArgs(FlagDescHolder_t desc, FlagsHolder_t *flags, int argc, c
 
         int remainToScan = 0;
         if (argv[i][1] == '-') //-abcd or --argument
-            remainToScan = scanFullArgument(desc, flags, argc-i, argv+i);
+            remainToScan = scanFullArgument(argc-i, argv+i);
         else
-            remainToScan = scanShortArguments(desc, flags, argc-i, argv+i);
+            remainToScan = scanShortArguments(argc-i, argv+i);
 
         if (remainToScan < 0) { //remainToScan < 0 is universal error code
-            deleteFlags(flags);
+            deleteFlags();
             logPrint(L_ZERO, 1, "Wrong flags format\n");
             return ERROR;
         }
@@ -91,25 +120,27 @@ enum status processArgs(FlagDescHolder_t desc, FlagsHolder_t *flags, int argc, c
     char *argvConcatenated = joinStrings(argv, argc, " ");
     logPrint(L_DEBUG, 0, "%s\n", argvConcatenated);
     free(argvConcatenated);
+
+    atexit(deleteFlags); //registering free function to delete flags at exit
     return SUCCESS;
 }
 
-static int scanFullArgument(FlagDescHolder_t desc, FlagsHolder_t *flags, int remainToScan, const char *argv[]) {
-    for (size_t flagIndex = 0; flagIndex < desc.size; flagIndex++) {        //just iterating over all flags
-        if (strcmp(argv[0], desc.args[flagIndex].flagFullName) != 0) continue;
-        return scanToFlag(desc.args[flagIndex], flags, remainToScan, argv + 1) - 1;   //we pass remainToScan forward
+static int scanFullArgument(int remainToScan, const char *argv[]) {
+    for (size_t flagIndex = 0; flagIndex < registeredFlagsCount_; flagIndex++) {        //just iterating over all flags
+        if (strcmp(argv[0], flagsDescriptions[flagIndex].flagFullName) != 0) continue;
+        return scanToFlag(flagsDescriptions[flagIndex], remainToScan, argv + 1) - 1;                  //we pass remainToScan forward
     }                                                                   //but scanToFlag reads flag argument, so argv+1
     return -1;                                                          //-1 because we read argv flag
 }
 
-static int scanShortArguments(FlagDescHolder_t desc, FlagsHolder_t *flags, int remainToScan, const char *argv[]) {
+static int scanShortArguments(int remainToScan, const char *argv[]) {
     for (const char *shortName = argv[0]+1; (*shortName != '\0') && (remainToScan > 0); shortName++) { //iterating over short flags string
         bool scannedArg = false;
-        for (size_t flagIndex = 0; flagIndex < desc.size; flagIndex++) {
-            if (*shortName != desc.args[flagIndex].flagShortName[1]) continue;
+        for (size_t flagIndex = 0; flagIndex < registeredFlagsCount_; flagIndex++) {
+            if (*shortName != flagsDescriptions[flagIndex].flagShortName[1]) continue;
             scannedArg = true;
 
-            int newRemainToScan = scanToFlag(desc.args[flagIndex], flags, remainToScan, argv+1); //scanning flag param
+            int newRemainToScan = scanToFlag(flagsDescriptions[flagIndex], remainToScan, argv+1); //scanning flag param
             argv += remainToScan - newRemainToScan; //moving argv
             if (newRemainToScan < 0) return newRemainToScan; //checking for error
             remainToScan = newRemainToScan;
@@ -119,7 +150,7 @@ static int scanShortArguments(FlagDescHolder_t desc, FlagsHolder_t *flags, int r
     return remainToScan-1; //scanned current argv -> -1
 }
 
-static int scanToFlag(flagDescriptor_t desc, FlagsHolder_t *flags, int remainToScan, const char *argv[]) {
+static int scanToFlag(flagDescriptor_t desc, int remainToScan, const char *argv[]) {
     fVal_t val = {};
 
     if (desc.type != TYPE_BLANK) {
@@ -147,7 +178,7 @@ static int scanToFlag(flagDescriptor_t desc, FlagsHolder_t *flags, int remainToS
         }
     }
 
-    if (addFlag(flags, desc, val) != SUCCESS) {
+    if (addFlag(desc, val) != SUCCESS) {
         if (desc.type == TYPE_STRING)
             FREE(val.string_);
         return -1;
@@ -155,18 +186,17 @@ static int scanToFlag(flagDescriptor_t desc, FlagsHolder_t *flags, int remainToS
     return remainToScan;
 }
 
-void printHelpMessage(FlagDescHolder_t desc) {           //building help message from flags descriptions
-    printf("Sort strings in file\n");
-    printf("Example: ./main -io in.txt out.txt\n");
-    printf("You can concatenate short version of flags\n");
+void printHelpMessage() {           //building help message from flags descriptions
+    if (helpMessageHeader_)
+        printf("%s", helpMessageHeader_);
     printf("Available flags:\n");
-    for (size_t i = 0; i < desc.size; i++) {
-        printf("%5s,%10s %s\n", desc.args[i].flagShortName, desc.args[i].flagFullName, desc.args[i].flagHelp);
+    for (size_t i = 0; i < registeredFlagsCount_; i++) {
+        printf("%5s,%10s %s\n", flagsDescriptions[i].flagShortName, flagsDescriptions[i].flagFullName, flagsDescriptions[i].flagHelp);
     }
     printf("orientiered, MIPT 2024\n");
 }
 
-static flagVal_t *findFlag(FlagsHolder_t flags, const char *flagName) {
+static flagVal_t *findFlag(const char *flagName) {
     MY_ASSERT(flagName, abort());
     for (size_t flagIndex = 0; flagIndex < flags.size; flagIndex++) {
         if ((strcmp(flagName, flags.flags[flagIndex].desc.flagShortName) == 0) ||
@@ -176,40 +206,40 @@ static flagVal_t *findFlag(FlagsHolder_t flags, const char *flagName) {
     return NULL;
 }
 
-bool isFlagSet(const FlagsHolder_t flags, const char *flagName) {
-    return findFlag(flags, flagName) != NULL;
+bool isFlagSet(const char *flagName) {
+    return findFlag(flagName) != NULL;
 }
 
-fVal_t getFlagValue(const FlagsHolder_t flags, const char *flagName) {
-    flagVal_t *flag = findFlag(flags, flagName);
+fVal_t getFlagValue(const char *flagName) {
+    flagVal_t *flag = findFlag(flagName);
     if (flag != NULL) return flag->val;
     fVal_t result = {};
     return result;
 }
 
-static enum status addFlag(FlagsHolder_t *flags, flagDescriptor desc, fVal_t val) {
-    DBG_PRINTF("Adding %s flag\n", desc.flagFullName);
-    if (findFlag(*flags, desc.flagShortName) != NULL) {
-        fprintf(stderr, "Repeating flags not accepted\n");
+static enum status addFlag(flagDescriptor_t desc, fVal_t val) {
+    logPrint(L_DEBUG, 0, "Adding %s flag\n", desc.flagFullName);
+    if (findFlag(desc.flagShortName) != NULL) {
+        logPrint(L_ZERO, 1, "Repeating flags not accepted\n");
         return ERROR; //don't accept repeating flags
     }
-    if (flags->size == flags->reserved) {
-        fprintf(stderr, "Number of flags is limited by %lu\n", FLAGS_RESERVED);
+    if (flags.size == flags.reserved) {
+        logPrint(L_ZERO, 1, "Number of flags is limited by %lu\n", flags.reserved);
         return ERROR;
     }
 
-    flags->flags[flags->size].desc = desc;
-    flags->flags[flags->size].val = val;
-    flags->size++;
+    flags.flags[flags.size].desc = desc;
+    flags.flags[flags.size].val = val;
+    flags.size++;
     return SUCCESS;
 }
 
-void deleteFlags(FlagsHolder_t *flags) {
-    for (size_t index = 0; index < flags->size; index++) {
-        if (flags->flags[index].desc.type == TYPE_STRING)
-            FREE(flags->flags[index].val.string_);
+void deleteFlags() {
+    for (size_t index = 0; index < flags.size; index++) {
+        if (flags.flags[index].desc.type == TYPE_STRING)
+            FREE(flags.flags[index].val.string_);
     }
-    FREE(flags->flags);
+    FREE(flags.flags);
 }
 
 static char* joinStrings(const char **strings, size_t len, const char *separator) {
