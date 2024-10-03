@@ -37,32 +37,37 @@
 /*------------------STRUCTS AND CONSTANTS-------------------------------------*/
 
 typedef int stkElem_t;
-const stkElem_t POISON_ELEM = stkElem_t(0xABADF00D);        //this value is filled in empty memory
+//Add more digits to xor_const and poison elem
+const stkElem_t POISON_ELEM = stkElem_t(0xABADF00DA2DDEAD3);        //this value is filled in empty memory
 #define STK_ELEM_FMT "%d"
-ON_CANARY(                                      \
-static const uint64_t XOR_CONST =  0xEDABEDAF;  \
-typedef uint64_t canary_t;                      \
+ON_CANARY(                                              \
+static const uint64_t XOR_CONST =  0xEDABEDAF8A40FF15;  \
+typedef uint64_t canary_t;                              \
 )
 ON_HASH(typedef uint64_t hash_t;)
 
-enum StackError {
-    ERR_NO = 0,                                 ///< No errors
-    ERR_DATA,                                   ///< Data is NULL when capacity > 0
-    ERR_SIZE,                                   ///< Size > maxSize
-    ERR_CAPACITY,                               ///< Capacity > maxSize
-    ERR_LOGIC                                   ///< Size > capacity
-    ON_CANARY(, ERR_CANARY)                     ///< At least one canary is broken
-    ON_HASH(, ERR_HASH_DATA, ERR_HASH_STACK)    ///< Incorrect data and struct hash
-};
+typedef struct {
+    bool ERR_DATA       :1;                 ///< Data is NULL when capacity > 0
+    bool ERR_SIZE       :1;                 ///< Size > maxSize
+    bool ERR_CAPACITY   :1;                 ///< Capacity > maxSize
+    bool ERR_LOGIC      :1;                 ///< Size > capacity
+    ON_CANARY(
+    bool ERR_CANARY     :1;                 ///< At least one canary is broken
+    )
+    ON_HASH(
+    bool ERR_HASH_DATA  :1;                 ///< Incorrect data and struct hash
+    bool ERR_HASH_STACK :1;
+    )
+} StackError_t;
 
 typedef struct {
     ON_CANARY(canary_t goose1;)                 ///< first canary
     ON_DEBUG(
-    const char *bornFile;                       ///< file where stack was constructed
-    int bornLine;                               ///< line in that file
+    const char *initFile;                       ///< file where stack was constructed
+    int initLine;                               ///< line in that file
     const char *name;                           ///< name passed in stackCtor
     )
-    enum StackError err;                        ///< Error code
+    StackError_t err;                           ///< Error code
     size_t size;                                ///< Number of elements in stack
     size_t capacity;                            ///< Size of reserved memory
     stkElem_t *data;                            ///< Array with elements
@@ -79,7 +84,7 @@ typedef struct {
 #define stackCtor(stk, startCapacity) stackCtorBase(stk, startCapacity ON_DEBUG(, __FILE__, __LINE__, #stk))
 
 /// @brief Delete stack
-enum StackError stackDtor(Stack_t *stk);
+StackError_t stackDtor(Stack_t *stk);
 
 /// @brief Push element to stack
 #define stackPush(stk, val) stackPushBase(stk, val ON_DEBUG(, __FILE__, __LINE__, #stk))
@@ -96,20 +101,20 @@ size_t stackGetSize(Stack_t *stk);
 
 /// @brief Check stk for errors
 /// Return false if there's any error, wright it in err field of stack
-bool stackOk(Stack_t *stk);
+bool stackVerify(Stack_t *stk);
 
 /// @brief Wright stack dump is log file
 #define stackDump(stk) stackDumpBase(stk, __FILE__, __LINE__, __PRETTY_FUNCTION__)
 
 /// @brief Convert stack error code to string
-const char *stackErrorToStr(enum StackError err);
+const char *stackErrorToStr(StackError_t err);
 
 /* -----------------BASE LIBRARY FUNCTIONS; DO NOT USE------------------------*/
 
-enum StackError stackCtorBase(Stack_t *stk, size_t startCapacity
-                ON_DEBUG(, const char *bornFile, int bornLine, const char *name));
+StackError_t stackCtorBase(Stack_t *stk, size_t startCapacity
+                ON_DEBUG(, const char *initFile, int initLine, const char *name));
 
-enum StackError stackPushBase(Stack_t *stk, stkElem_t val
+StackError_t stackPushBase(Stack_t *stk, stkElem_t val
                 ON_DEBUG(, const char *file, int line, const char *name));
 
 stkElem_t stackPopBase(Stack_t *stk
@@ -126,7 +131,7 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
             logPrintWithTime(L_ZERO, 1, "NULL \"%s\" stack pointer passed\n");                      \
             MY_ASSERT(0, abort());                                                                  \
         }                                                                                           \
-        if (!stackOk(stk)) {                                                                        \
+        if (!stackVerify(stk)) {                                                                    \
             logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackErrorToStr(stk->err));   \
             stackDump(stk);                                                                         \
             MY_ASSERT(0, abort());                                                                  \
@@ -140,7 +145,7 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
                             name, file, line);                                                      \
             MY_ASSERT(0, abort());                                                                  \
         }                                                                                           \
-        if (!stackOk(stk)) {                                                                        \
+        if (!stackVerify(stk)) {                                                                    \
             logPrintWithTime(L_ZERO, 1, "Stack \"%s\" error in %s:%d : %s\n",                       \
                             name, file, line, stackErrorToStr(stk->err));                           \
             stackDump(stk);                                                                         \

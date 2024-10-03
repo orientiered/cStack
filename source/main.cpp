@@ -14,13 +14,6 @@ int main(int argc, const char *argv[]) {
     logOpen();
     setLogLevel(L_EXTRA);
 
-    setHelpMessageHeader("Hello\n");
-    registerFlag(TYPE_BLANK, "-h", "--help", "Prints help message");
-    registerFlag(TYPE_STRING, "-s", "--string", "Get string");
-    processArgs(argc, argv);
-
-    if (isFlagSet("-h")) printHelpMessage();
-    if (isFlagSet("-s")) printf("%s\n", getFlagValue("-s").string_);
     test1();
     test2();
     logClose();

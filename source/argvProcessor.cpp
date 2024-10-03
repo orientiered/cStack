@@ -118,6 +118,7 @@ enum status processArgs(int argc, const char *argv[]) {
     }
 
     char *argvConcatenated = joinStrings(argv, argc, " ");
+    //TODO: add "" on strings with " "
     logPrint(L_DEBUG, 0, "%s\n", argvConcatenated);
     free(argvConcatenated);
 
@@ -169,7 +170,7 @@ static int scanToFlag(flagDescriptor_t desc, int remainToScan, const char *argv[
             {
             size_t len = strlen(argv[0]);
             val.string_ = (char *) calloc(len + 1, sizeof(char));
-            sscanf(argv[0], "%s", val.string_);
+            sscanf(argv[0], "%[^\r]", val.string_);
             break;
             }
         default:
