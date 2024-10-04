@@ -29,8 +29,6 @@ static size_t getCanaryAlign(size_t len);
 static size_t getSizeWithCanary(size_t len);
 )
 
-static bool checkErrorField(StackError_t *err);
-
 static void *smartRecalloc(void *data, size_t newLen, size_t oldLen, size_t elemSize) {
     logPrintWithTime(L_EXTRA, 0, "---------------------MEMORY LOG---------------------\n");
 
@@ -65,7 +63,8 @@ static void *smartRecalloc(void *data, size_t newLen, size_t oldLen, size_t elem
     logPrint(L_DEBUG, 0, "WITH_CANARIES (bytes): %lu --> %lu\n",
                 getSizeWithCanary(oldLen * elemSize),
                 getSizeWithCanary(newLen * elemSize));
-    fillCanaries(data, newLen * elemSize + sizeDelta);
+    if (newLen != 0)
+        fillCanaries(data, newLen * elemSize + sizeDelta);
     data = (char*) data + sizeof(canary_t);
     )
     logPrintWithTime(L_DEBUG, 0, "-------------------------\n");
@@ -150,7 +149,7 @@ StackError_t stackCtorBase(Stack_t *stk, size_t startCapacity
 
 StackError_t stackDtor(Stack_t *stk) {
     STACK_ASSERT(stk);
-    free((char*)stk->data ON_CANARY(- sizeof(canary_t)));
+    smartRecalloc(stk->data, 0, stk->capacity, sizeof(stkElem_t));
     memset(stk, 0, sizeof(*stk));
     return stk->err;
 }
@@ -199,60 +198,52 @@ size_t stackGetSize(Stack_t *stk) {
     return stk->size;
 }
 
-static bool checkErrorField(StackError_t *err) {
-    //alignment bits must be zero
-    bool error = false;
-    for (unsigned block = 0; block < sizeof(*err); block++)
-        error = error || *(uint8_t*)err;
-    return error;
-}
-
 bool stackVerify(Stack_t *stk) {
     MY_ASSERT(stk, abort());
 
     //cap > 0 and data == 0 or cap == 0 and data !=0
-    bool ERR_DATA = (stk->capacity > 0) ^ bool(stk->data);
+    bool dataError = (stk->capacity > 0) ^ bool(stk->data);
 
     ON_HASH(
     if (stk->stackHash != getStackHash(stk))
-        stk->err.ERR_HASH_STACK = 1;
-    if (!ERR_DATA && (stk->dataHash != getDataHash(stk)))
-        stk->err.ERR_HASH_DATA = 1;
+        stk->err |= ERR_HASH_STACK;
+    if (!(dataError || (stk->err & ERR_HASH_STACK)) && (stk->dataHash != getDataHash(stk)))
+        stk->err |= ERR_HASH_DATA;
     )
-
+    bool dataCorrupted = dataError || (stk->err & ERR_HASH_STACK);
     ON_CANARY(
     if (!canariesOk(stk, sizeof(*stk), 0))
-        stk->err.ERR_CANARY = 1;
-    if (!ERR_DATA && !canariesOk(stk->data, stk->capacity * sizeof(stkElem_t), 1))
-        stk->err.ERR_CANARY = 1;
+        stk->err |= ERR_CANARY;
+    if (!dataCorrupted && !canariesOk(stk->data, stk->capacity * sizeof(stkElem_t), 1))
+        stk->err |= ERR_CANARY;
     )
-    stk->err.ERR_DATA = ERR_DATA;
+    if (dataError)
+        stk->err |= ERR_DATA;
     if (stk->size > stk->capacity)
-        stk->err.ERR_LOGIC = 1;
+        stk->err |= ERR_LOGIC;
     if (stk->size > MAX_STACK_SIZE)
-        stk->err.ERR_SIZE = 1;
+        stk->err |= ERR_SIZE;
     if (stk->capacity > MAX_STACK_SIZE)
-        stk->err.ERR_CAPACITY = 1;
+        stk->err |= ERR_CAPACITY;
 
-    return checkErrorField(&stk->err);
+    return !stk->err;
 }
 
-//TODO: do not print elements on stack hash error
 static bool stackDumpData(Stack_t *stk);
 static bool stackDumpErr (Stack_t *stk);
 
 static bool stackDumpErr(Stack_t *stk) {
     logPrint(L_ZERO, 0, "\terr = {\n");
-    logPrint(L_ZERO, 0, "\t\tERR_SIZE       = %u\n", stk->err.ERR_SIZE);
-    logPrint(L_ZERO, 0, "\t\tERR_DATA       = %u\n", stk->err.ERR_DATA);
-    logPrint(L_ZERO, 0, "\t\tERR_CAPACITY   = %u\n", stk->err.ERR_CAPACITY);
-    logPrint(L_ZERO, 0, "\t\tERR_LOGIC      = %u\n", stk->err.ERR_LOGIC);
+    logPrint(L_ZERO, 0, "\t\tERR_SIZE       = %u\n", (bool) (stk->err & ERR_SIZE));
+    logPrint(L_ZERO, 0, "\t\tERR_DATA       = %u\n", (bool) (stk->err & ERR_DATA));
+    logPrint(L_ZERO, 0, "\t\tERR_CAPACITY   = %u\n", (bool) (stk->err & ERR_CAPACITY));
+    logPrint(L_ZERO, 0, "\t\tERR_LOGIC      = %u\n", (bool) (stk->err & ERR_LOGIC));
     ON_CANARY(
-    logPrint(L_ZERO, 0, "\t\tERR_CANARY     = %u\n", stk->err.ERR_CANARY);
+    logPrint(L_ZERO, 0, "\t\tERR_CANARY     = %u\n", (bool) (stk->err & ERR_CANARY));
     )
     ON_HASH(
-    logPrint(L_ZERO, 0, "\t\tERR_HASH_DATA  = %u\n", stk->err.ERR_DATA);
-    logPrint(L_ZERO, 0, "\t\tERR_HASH_STACK = %u\n", stk->err.ERR_DATA);
+    logPrint(L_ZERO, 0, "\t\tERR_HASH_DATA  = %u\n", (bool) (stk->err & ERR_HASH_DATA));
+    logPrint(L_ZERO, 0, "\t\tERR_HASH_STACK = %u\n", (bool) (stk->err & ERR_HASH_STACK));
     )
     logPrint(L_ZERO, 0, "\t}\n");
     return true;
@@ -261,6 +252,11 @@ static bool stackDumpErr(Stack_t *stk) {
 static bool stackDumpData(Stack_t *stk) {
     logPrint(L_ZERO, 0, "\tdata[%p] {\n", stk->data);
     if (!stk->data) {
+        logPrint(L_ZERO, 0, "\t}\n");
+        return true;
+    }
+    if (stk->err & ERR_HASH_STACK || stk->err & ERR_DATA) {
+        logPrint(L_ZERO, 0, "\t!!!Data may be corrupted!!!\n");
         logPrint(L_ZERO, 0, "\t}\n");
         return true;
     }
@@ -320,19 +316,25 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
         logPrint(L_ZERO, 0, "NULL pointer has been passed\n");
         return false;
     }
-    stackVerify(stk);
+    stackVerify(stk); //double checking errors
     #ifndef NDEBUG
-    logPrint(L_ZERO, 0, "\"%s\"[%p], created in %s:%d \n", stk->name, stk, stk->initFile, stk->initLine);
+    if (!stk->name || !stk->initFile)
+        logPrint(L_ZERO, 0, "[%p], no initialization information\n", stk);
+    else
+        logPrint(L_ZERO, 0, "\"%s\"[%p], created at %s:%d \n", stk->name, stk, stk->initFile, stk->initLine);
     #else
     logPrint(L_ZERO, 0, "\[%p], use debug version for more info \n", stk);
     #endif
     logPrint(L_ZERO, 0, "{\n");
+
     ON_CANARY(
     logPrint(L_ZERO, 0, "\tCanary1  = %zX\n", stk->goose1);
     if (!canaryOk(stk->goose1, stk))
         logPrint(L_ZERO, 0, "\tBROKEN: must be %zX\n", (size_t)stk ^ XOR_CONST);
     )
+
     stackDumpErr(stk);
+
     logPrint(L_ZERO, 0, "\tsize     = %lu\n", stk->size);
     if (stk->size > MAX_STACK_SIZE)
         logPrint(L_ZERO, 0, "\t!!!SIZE OVERFLOW\n");
@@ -341,36 +343,50 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
         logPrint(L_ZERO, 0, "\t!!!CAPACITY OVERFLOW\n");
     if (stk->size > stk->capacity)
         logPrint(L_ZERO, 0, "\t!!!SIZE > CAPACITY\n");
+
     stackDumpData(stk);
+
     ON_HASH(
     logPrint(L_ZERO, 0, "\tdataHash  = %#.16zX\n", stk->dataHash);
-    if (stk->dataHash != getDataHash(stk))
+    if (stk->err & (ERR_DATA + ERR_HASH_STACK))
+        logPrint(L_ZERO, 0, "\tData may be corrupted, can't calculate hash\n");
+    else if (stk->dataHash != getDataHash(stk))
         logPrint(L_ZERO, 0, "\tWrong hash: %#.16zX is correct hash\n", getDataHash(stk));
     logPrint(L_ZERO, 0, "\tstackHash = %#.16zX\n");
     if (stk->stackHash != getStackHash(stk))
         logPrint(L_ZERO, 0, "\tWrong hash: %#.16zX is correct hash\n", getStackHash(stk));
     )
+
     ON_CANARY(
     logPrint(L_ZERO, 0, "\tCanary2   = %zX\n", stk->goose2);
     if (!canaryOk(stk->goose2, stk))
         logPrint(L_ZERO, 0, "\tBROKEN: must be %zX\n", (size_t)stk ^ XOR_CONST);
     )
+
     logPrint(L_ZERO, 0, "}\n");
     return true;
 }
 
 const char *stackFirstErrorToStr(StackError_t err) {
-
-    static const char *errStrings[] = {
-        "ERR_DATA",
-        "ERR_SIZE",
-        "ERR_CAPACITY",
-        "ERR_LOGIC"
-        ON_CANARY(, "ERR_CANARY")
-        ON_HASH(, "ERR_HASH_DATA", "ERR_HASH_STACK")
-    };
-    MY_ASSERT(int(err) >= 0 && int(err) < ARRAY_SIZE(errStrings), abort());
-    return errStrings[int(err)];
+    if (err & ERR_DATA)
+        return "ERR_DATA";
+    if (err & ERR_SIZE)
+        return "ERR_SIZE";
+    if (err & ERR_CAPACITY)
+        return "ERR_CAPACITY";
+    if (err & ERR_LOGIC)
+        return "ERR_LOGIC";
+    ON_CANARY(
+    if (err & ERR_CANARY)
+        return "ERR_CANARY";
+    )
+    ON_HASH(
+    if (err & ERR_HASH_DATA)
+        return "ERR_HASH_DATA";
+    if (err & ERR_HASH_STACK)
+        return "ERR_HASH_STACK";
+    )
+    return "OK";
 }
 
 
@@ -379,6 +395,7 @@ static uint64_t getDataHash(Stack_t *stk) {
     MY_ASSERT(stk, abort());
     return memHash(stk->data, stk->capacity*sizeof(stkElem_t));
 }
+
 static uint64_t getStackHash(Stack_t *stk) {
     const hash_t magicNumber = 1337;
     MY_ASSERT(stk, abort());
@@ -389,10 +406,12 @@ static uint64_t getStackHash(Stack_t *stk) {
     return newHash;
 }
 )
+
 ON_CANARY(
 static bool canaryOk(canary_t canary, void *ptr) {
     return ((canary ^ XOR_CONST) == (size_t)ptr);
 }
+
 static int fillCanaries(void *data, size_t len) {
     if ((uint64_t) data % 8 != 0 || len % 8 != 0 || len < 2*sizeof(canary_t) )
         return 0;
@@ -400,6 +419,7 @@ static int fillCanaries(void *data, size_t len) {
     *(canary_t*)((char*)data + len - sizeof(canary_t))  = (uint64_t)data ^ XOR_CONST;
     return 1;
 }
+
 static ullPair_t getCanaries(void *data, size_t len) {
     ullPair_t result = {};
     if ((uint64_t) data % 8 != 0 || len % 8 != 0 || len < 2*sizeof(canary_t) )
@@ -408,13 +428,16 @@ static ullPair_t getCanaries(void *data, size_t len) {
     result.second = *(canary_t*)((char*)data + len - sizeof(canary_t));
     return result;
 }
+
 static size_t getCanaryAlign(size_t len) {
     return (8 - len % 8) % 8; // round up (len + 7) / 8
 }
+
 static size_t getSizeWithCanary(size_t len) {
     if (len == 0) return 0;
     return len + 2 * sizeof(canary_t) + getCanaryAlign(len); // 2 * sizeof(canary) + ROUNDUP(len, 8);
 }
+
 static bool canariesOk(void *data, size_t len, bool doOffset) {
     if (data == NULL) return true; //no canaries is ok
     if (doOffset) {

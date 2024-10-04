@@ -58,7 +58,7 @@
         do {                                                                                                                    \
             if (!(expr)) {                                                                                                      \
                 fprintf(stderr, RED "Assertion failed:\n\t[" #expr "]\n" RESET_C);                                              \
-                fprintf(stderr, RED "File: %s, function: %s, line: %d\n" RESET_C, __FILE__, __PRETTY_FUNCTION__, __LINE__);     \
+                fprintf(stderr, RED "%s:%d, function: %s\n" RESET_C, __FILE__, __LINE__, __PRETTY_FUNCTION__);                  \
                 {                                                                                                               \
                     __VA_ARGS__;                                                                                                \
                 }                                                                                                               \

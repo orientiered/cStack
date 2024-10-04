@@ -46,19 +46,20 @@ typedef uint64_t canary_t;                              \
 )
 ON_HASH(typedef uint64_t hash_t;)
 
-typedef struct {
-    bool ERR_DATA       :1;                 ///< Data is NULL when capacity > 0
-    bool ERR_SIZE       :1;                 ///< Size > maxSize
-    bool ERR_CAPACITY   :1;                 ///< Capacity > maxSize
-    bool ERR_LOGIC      :1;                 ///< Size > capacity
+typedef uint64_t StackError_t;
+enum StackErrors {
+    ERR_DATA       = 1 << 0,                 ///< Data is NULL when capacity > 0
+    ERR_SIZE       = 1 << 1,                 ///< Size > maxSize
+    ERR_CAPACITY   = 1 << 2,                 ///< Capacity > maxSize
+    ERR_LOGIC      = 1 << 3,                  ///< Size > capacity
     ON_CANARY(
-    bool ERR_CANARY     :1;                 ///< At least one canary is broken
+    ERR_CANARY     = 1 << 4,                 ///< At least one canary is broken
     )
     ON_HASH(
-    bool ERR_HASH_DATA  :1;                 ///< Incorrect data and struct hash
-    bool ERR_HASH_STACK :1;
+    ERR_HASH_DATA  = 1 << 5,                 ///< Incorrect data and struct hash
+    ERR_HASH_STACK = 1 << 6,
     )
-} StackError_t;
+};
 
 typedef struct {
     ON_CANARY(canary_t goose1;)                 ///< first canary
@@ -107,7 +108,7 @@ bool stackVerify(Stack_t *stk);
 #define stackDump(stk) stackDumpBase(stk, __FILE__, __LINE__, __PRETTY_FUNCTION__)
 
 /// @brief Convert stack error code to string
-const char *stackErrorToStr(StackError_t err);
+const char *stackFirstErrorToStr(StackError_t err);
 
 /* -----------------BASE LIBRARY FUNCTIONS; DO NOT USE------------------------*/
 
@@ -132,7 +133,7 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
             MY_ASSERT(0, abort());                                                                  \
         }                                                                                           \
         if (!stackVerify(stk)) {                                                                    \
-            logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackErrorToStr(stk->err));   \
+            logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackFirstErrorToStr(stk->err));   \
             stackDump(stk);                                                                         \
             MY_ASSERT(0, abort());                                                                  \
         }                                                                                           \
@@ -147,7 +148,7 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
         }                                                                                           \
         if (!stackVerify(stk)) {                                                                    \
             logPrintWithTime(L_ZERO, 1, "Stack \"%s\" error in %s:%d : %s\n",                       \
-                            name, file, line, stackErrorToStr(stk->err));                           \
+                            name, file, line, stackFirstErrorToStr(stk->err));                           \
             stackDump(stk);                                                                         \
             MY_ASSERT(0, abort());                                                                  \
         }                                                                                           \

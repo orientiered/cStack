@@ -14,6 +14,13 @@ int main(int argc, const char *argv[]) {
     logOpen();
     setLogLevel(L_EXTRA);
 
+    registerFlag(TYPE_BLANK, "-r", "--remove", "Delete old log file");
+    processArgs(argc, argv);
+    if (isFlagSet("-r")) {
+        system("rm log.txt");
+        logOpen();
+    }
+
     test1();
     test2();
     logClose();
@@ -22,6 +29,10 @@ int main(int argc, const char *argv[]) {
 void test1() {
     Stack_t stk = {};
     stackCtor(&stk, 1);
+    // stk.data -= 10;
+    // stk.capacity = 0;
+    // stk.size = 1000;
+    // stk.goose1 = 4;
     stackPush(&stk, 100);
     stackPush(&stk, 200);
     //stk.data[1] = 5;
@@ -34,6 +45,7 @@ void test1() {
     }
     logPrint(L_ZERO, 1, "Val: %d\n", stackPop(&stk));
     logPrint(L_ZERO, 1, "Val: %d\n", stackPop(&stk));
+    stackDtor(&stk);
     stackDtor(&stk);
 }
 

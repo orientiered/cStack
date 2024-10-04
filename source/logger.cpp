@@ -36,7 +36,6 @@ enum status logOpen() {
     fprintf(logFile, "------------------------------------------\n");
     logTime();
     fprintf(logFile, "Starting logging session\n");
-
     return SUCCESS;
 }
 
