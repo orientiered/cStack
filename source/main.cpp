@@ -29,13 +29,8 @@ int main(int argc, const char *argv[]) {
 void test1() {
     Stack_t stk = {};
     stackCtor(&stk, 1);
-    // stk.data -= 10;
-    // stk.capacity = 0;
-    // stk.size = 1000;
-    // stk.goose1 = 4;
     stackPush(&stk, 100);
     stackPush(&stk, 200);
-    //stk.data[1] = 5;
     for (int i = 0; i < 100; i++) {
         stackPush(&stk, 5*i);
     }
@@ -46,6 +41,7 @@ void test1() {
     logPrint(L_ZERO, 1, "Val: %d\n", stackPop(&stk));
     logPrint(L_ZERO, 1, "Val: %d\n", stackPop(&stk));
     stackDtor(&stk);
+    stackCtor(&stk, 100);
     stackDtor(&stk);
 }
 

@@ -113,8 +113,18 @@ static StackError_t stackChangeSize(Stack_t *stk, enum StackSizeOp op) {
 
 StackError_t stackCtorBase(Stack_t *stk, size_t startCapacity
                 ON_DEBUG(, const char *initFile, int initLine, const char *name)) {
-    MY_ASSERT(stk, abort());
+    MY_ASSERT(stk, {
+        ON_DEBUG(logPrint(L_ZERO, 1, "\"%s\" at %s:%d\n", name, initFile, initLine);)
+        logPrint(L_ZERO, 1, "NULL Stack_t pointer passed to stackCtor\n");
+        abort();
+    });
     ON_DEBUG(MY_ASSERT(initFile && name, abort());)
+
+    MY_ASSERT(!stk->data, {
+        ON_DEBUG(logPrint(L_ZERO, 1, "\"%s\" at %s:%d\n", name, initFile, initLine);)
+        logPrint(L_ZERO, 1, "Stack_t data probably hasn't been deallocated\n");
+        abort();
+    });
 
     memset(stk, 0, sizeof(*stk));
     ON_CANARY(
@@ -156,7 +166,7 @@ StackError_t stackDtor(Stack_t *stk) {
 
 StackError_t stackPushBase(Stack_t *stk, stkElem_t val
                 ON_DEBUG(, const char *file, int line, const char *name)) {
-    STACK_VERBOSE_ASSERT(stk, file, line, name);
+    STACK_VERBOSE_ASSERT(stk);
 
     stackChangeSize(stk, OP_PUSH);
     stk->data[stk->size-1] = val;
@@ -165,14 +175,14 @@ StackError_t stackPushBase(Stack_t *stk, stkElem_t val
     stk->stackHash = getStackHash(stk);
     )
 
-    STACK_VERBOSE_ASSERT(stk, file, line, name);
+    STACK_VERBOSE_ASSERT(stk);
     logPrintWithTime(L_EXTRA, 0, "Push in %p: " STK_ELEM_FMT "\n", stk, val);
     return stk->err;
 }
 
 stkElem_t stackPopBase(Stack_t *stk
             ON_DEBUG(, const char *file, int line, const char *name)) {
-    STACK_VERBOSE_ASSERT(stk, file, line, name);
+    STACK_VERBOSE_ASSERT(stk);
     MY_ASSERT((stk->size > 0), abort());
 
     logPrintWithTime(L_EXTRA, 0, "Popping element: size = %lu, val = " STK_ELEM_FMT "\n", stk->size, stk->data[stk->size-1]);
@@ -182,7 +192,7 @@ stkElem_t stackPopBase(Stack_t *stk
     stk->dataHash  = getDataHash(stk);
     stk->stackHash = getStackHash(stk);
     )
-    STACK_VERBOSE_ASSERT(stk, file, line, name);
+    STACK_VERBOSE_ASSERT(stk);
     return val;
 }
 
@@ -210,8 +220,9 @@ bool stackVerify(Stack_t *stk) {
     if (!(dataError || (stk->err & ERR_HASH_STACK)) && (stk->dataHash != getDataHash(stk)))
         stk->err |= ERR_HASH_DATA;
     )
-    bool dataCorrupted = dataError || (stk->err & ERR_HASH_STACK);
     ON_CANARY(
+    bool dataCorrupted = dataError;
+    ON_HASH(dataCorrupted = dataCorrupted || (stk->err & ERR_HASH_STACK));
     if (!canariesOk(stk, sizeof(*stk), 0))
         stk->err |= ERR_CANARY;
     if (!dataCorrupted && !canariesOk(stk->data, stk->capacity * sizeof(stkElem_t), 1))
@@ -255,18 +266,25 @@ static bool stackDumpData(Stack_t *stk) {
         logPrint(L_ZERO, 0, "\t}\n");
         return true;
     }
-    if (stk->err & ERR_HASH_STACK || stk->err & ERR_DATA) {
+    bool dataCorrupted = stk->err & ERR_DATA;
+    ON_HASH(dataCorrupted = !(stk->err & ERR_HASH_DATA) && (stk->err & ERR_HASH_STACK || dataCorrupted);)
+    if (dataCorrupted) {
         logPrint(L_ZERO, 0, "\t!!!Data may be corrupted!!!\n");
         logPrint(L_ZERO, 0, "\t}\n");
         return true;
     }
-    ON_CANARY(                                                                                                              \
-    ullPair_t canaries = getCanaries((char*)stk->data - sizeof(canary_t),                                                   \
-                                        getSizeWithCanary(stk->capacity * sizeof(stkElem_t)));                              \
-    logPrint(L_ZERO, 0, "\t^ [ -1] %zX (DataCanary1)\n", canaries.first);                                                   \
-    if (!canaryOk(canaries.first, (char*)stk->data - sizeof(canary_t)))                                                     \
-        logPrint(L_ZERO, 0, "BROKEN:     %zX is correct canary\n", ((size_t)stk->data - sizeof(canary_t)) ^ XOR_CONST);     \
+
+    ON_CANARY(
+    ullPair_t canaries = getCanaries((char*)stk->data - sizeof(canary_t),
+                                        getSizeWithCanary(stk->capacity * sizeof(stkElem_t)));
+    logPrint(L_ZERO, 0, "\t^ [ -1] %zX (DataCanary1)\n", canaries.first);
+    if (!canaryOk(canaries.first, (char*)stk->data - sizeof(canary_t)))
+        logPrint(L_ZERO, 0, "BROKEN:     %zX is correct canary\n", ((size_t)stk->data - sizeof(canary_t)) ^ XOR_CONST);                                                                                                                  \
+    logPrint(L_ZERO, 0, "\t^ [%3d] %zX (DataCanary2)\n", stk->capacity, canaries.second);
+    if (!canaryOk(canaries.second, (char*)stk->data - sizeof(canary_t)))
+        logPrint(L_ZERO, 0, "BROKEN:     %zX is correct canary\n", ((size_t)stk->data - sizeof(canary_t)) ^ XOR_CONST);
     )
+
     for (size_t index = 0; index < stk->size && index < stk->capacity; index++) {
         logPrint(L_ZERO, 0, "\t* ");
         if (memcmp(stk->data + index, &POISON_ELEM, sizeof(stkElem_t)) == 0)
@@ -300,11 +318,7 @@ static bool stackDumpData(Stack_t *stk) {
         poisonElems = 0;
         logPrint(L_ZERO, 0, "\t  [%3d] %zX (POISON)\n", stk->capacity-1, POISON_ELEM);
     }
-    ON_CANARY(                                                                                                              \
-    logPrint(L_ZERO, 0, "\t^ [%3d] %zX (DataCanary2)\n", stk->capacity, canaries.second);                                   \
-    if (!canaryOk(canaries.second, (char*)stk->data - sizeof(canary_t)))                                                    \
-        logPrint(L_ZERO, 0, "BROKEN:     %zX is correct canary\n", ((size_t)stk->data - sizeof(canary_t)) ^ XOR_CONST);     \
-    )
+
     logPrint(L_ZERO, 0, "\t}\n");
     return true;
 }
@@ -331,6 +345,9 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
     logPrint(L_ZERO, 0, "\tCanary1  = %zX\n", stk->goose1);
     if (!canaryOk(stk->goose1, stk))
         logPrint(L_ZERO, 0, "\tBROKEN: must be %zX\n", (size_t)stk ^ XOR_CONST);
+    logPrint(L_ZERO, 0, "\tCanary2  = %zX\n", stk->goose2);
+    if (!canaryOk(stk->goose2, stk))
+        logPrint(L_ZERO, 0, "\tBROKEN: must be %zX\n", (size_t)stk ^ XOR_CONST);
     )
 
     stackDumpErr(stk);
@@ -348,19 +365,13 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
 
     ON_HASH(
     logPrint(L_ZERO, 0, "\tdataHash  = %#.16zX\n", stk->dataHash);
-    if (stk->err & (ERR_DATA + ERR_HASH_STACK))
+    if (!(stk->err & ERR_HASH_DATA) && stk->err & (ERR_DATA + ERR_HASH_STACK))
         logPrint(L_ZERO, 0, "\tData may be corrupted, can't calculate hash\n");
     else if (stk->dataHash != getDataHash(stk))
         logPrint(L_ZERO, 0, "\tWrong hash: %#.16zX is correct hash\n", getDataHash(stk));
     logPrint(L_ZERO, 0, "\tstackHash = %#.16zX\n");
     if (stk->stackHash != getStackHash(stk))
         logPrint(L_ZERO, 0, "\tWrong hash: %#.16zX is correct hash\n", getStackHash(stk));
-    )
-
-    ON_CANARY(
-    logPrint(L_ZERO, 0, "\tCanary2   = %zX\n", stk->goose2);
-    if (!canaryOk(stk->goose2, stk))
-        logPrint(L_ZERO, 0, "\tBROKEN: must be %zX\n", (size_t)stk ^ XOR_CONST);
     )
 
     logPrint(L_ZERO, 0, "}\n");

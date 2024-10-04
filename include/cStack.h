@@ -126,20 +126,20 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
 /* -----------------ASSERTS FOR DEBUGGING-------------------------------------*/
 
 #ifndef NDEBUG
-# define STACK_ASSERT(stk)                                                                          \
-    do {                                                                                            \
-        if (!stk) {                                                                                 \
-            logPrintWithTime(L_ZERO, 1, "NULL \"%s\" stack pointer passed\n");                      \
-            MY_ASSERT(0, abort());                                                                  \
-        }                                                                                           \
-        if (!stackVerify(stk)) {                                                                    \
-            logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackFirstErrorToStr(stk->err));   \
-            stackDump(stk);                                                                         \
-            MY_ASSERT(0, abort());                                                                  \
-        }                                                                                           \
+# define STACK_ASSERT(stk)                                                                              \
+    do {                                                                                                \
+        if (!stk) {                                                                                     \
+            logPrintWithTime(L_ZERO, 1, "NULL \"%s\" stack pointer passed\n");                          \
+            MY_ASSERT(0, abort());                                                                      \
+        }                                                                                               \
+        if (!stackVerify(stk)) {                                                                        \
+            logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackFirstErrorToStr(stk->err));  \
+            stackDump(stk);                                                                             \
+            MY_ASSERT(0, abort());                                                                      \
+        }                                                                                               \
     } while (0)
 
-# define STACK_VERBOSE_ASSERT(stk, file, line, name)                                                \
+# define STACK_VERBOSE_ASSERT(stk)                                                                  \
     do {                                                                                            \
         if (!stk) {                                                                                 \
             logPrintWithTime(L_ZERO, 1, "NULL \"%s\" stack pointer passed in %s:%d\n",              \
@@ -148,13 +148,14 @@ bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *functio
         }                                                                                           \
         if (!stackVerify(stk)) {                                                                    \
             logPrintWithTime(L_ZERO, 1, "Stack \"%s\" error in %s:%d : %s\n",                       \
-                            name, file, line, stackFirstErrorToStr(stk->err));                           \
+                            name, file, line, stackFirstErrorToStr(stk->err));                      \
             stackDump(stk);                                                                         \
             MY_ASSERT(0, abort());                                                                  \
         }                                                                                           \
     } while (0)
 #else
 # define STACK_ASSERT(stk)
+# define STACK_VERBOSE_ASSERT(stk)
 #endif
 
 #endif
