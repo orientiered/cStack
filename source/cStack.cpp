@@ -176,7 +176,7 @@ StackError_t stackPushBase(Stack_t *stk, stkElem_t val
     )
 
     STACK_VERBOSE_ASSERT(stk);
-    logPrintWithTime(L_EXTRA, 0, "Push in %p: " STK_ELEM_FMT "\n", stk, val);
+    logPrintWithTime(L_EXTRA, 0, "Stack_t[%p] push: " STK_ELEM_FMT "\n", stk, val);
     return stk->err;
 }
 
@@ -185,7 +185,7 @@ stkElem_t stackPopBase(Stack_t *stk
     STACK_VERBOSE_ASSERT(stk);
     MY_ASSERT((stk->size > 0), abort());
 
-    logPrintWithTime(L_EXTRA, 0, "Popping element: size = %lu, val = " STK_ELEM_FMT "\n", stk->size, stk->data[stk->size-1]);
+    logPrintWithTime(L_EXTRA, 0, "Stack_t[%p] pop: size = %lu, val = " STK_ELEM_FMT "\n",stk, stk->size, stk->data[stk->size-1]);
     stkElem_t val = stk->data[stk->size-1];
     stackChangeSize(stk, OP_POP);
     ON_HASH(
