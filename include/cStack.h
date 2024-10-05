@@ -37,7 +37,6 @@
 /*------------------STRUCTS AND CONSTANTS-------------------------------------*/
 
 typedef int stkElem_t;
-//Add more digits to xor_const and poison elem
 const stkElem_t POISON_ELEM = stkElem_t(0xABADF00DA2DDEAD3);        //this value is filled in empty memory
 #define STK_ELEM_FMT "%d"
 ON_CANARY(                                              \
@@ -48,16 +47,24 @@ ON_HASH(typedef uint64_t hash_t;)
 
 typedef uint64_t StackError_t;
 enum StackErrors {
-    ERR_DATA       = 1 << 0,                 ///< Data is NULL when capacity > 0
-    ERR_SIZE       = 1 << 1,                 ///< Size > maxSize
-    ERR_CAPACITY   = 1 << 2,                 ///< Capacity > maxSize
-    ERR_LOGIC      = 1 << 3,                  ///< Size > capacity
+    STACK_OK                = 0,                    ///< Ok
+    ERR_NULLPTR             = 1 << 0,               ///< NULL stack_t pointer passed
+    ERR_DATA                = 1 << 1,               ///< Data is NULL when capacity > 0
+    ERR_SIZE                = 1 << 2,               ///< Size > maxSize
+    ERR_CAPACITY            = 1 << 3,               ///< Capacity > maxSize
+    ERR_LOGIC               = 1 << 4,               ///< Size > capacity
+
     ON_CANARY(
-    ERR_CANARY     = 1 << 4,                 ///< At least one canary is broken
+    ERR_CANARY_LEFT         = 1 << 5,               ///< Wrong left stack canary
+    ERR_CANARY_RIGHT        = 1 << 6,               ///< Wrong right stack canary
+    ERR_DATA_CANARY_LEFT    = 1 << 7,               ///< Wrong left data canary
+    ERR_DATA_CANARY_RIGHT   = 1 << 8,               ///< Wrong right data canary
+    ERR_CANARY              = ((1 << 4) - 1) << 5,  ///< Any canary is wrong
     )
+
     ON_HASH(
-    ERR_HASH_DATA  = 1 << 5,                 ///< Incorrect data and struct hash
-    ERR_HASH_STACK = 1 << 6,
+    ERR_HASH_DATA           = 1 << 9,               ///< Incorrect data hash
+    ERR_HASH_STACK          = 1 << 10,              ///< Incorrect stack hash
     )
 };
 
@@ -68,7 +75,6 @@ typedef struct {
     int initLine;                               ///< line in that file
     const char *name;                           ///< name passed in stackCtor
     )
-    StackError_t err;                           ///< Error code
     size_t size;                                ///< Number of elements in stack
     size_t capacity;                            ///< Size of reserved memory
     stkElem_t *data;                            ///< Array with elements
@@ -102,7 +108,7 @@ size_t stackGetSize(Stack_t *stk);
 
 /// @brief Check stk for errors
 /// Return false if there's any error, wright it in err field of stack
-bool stackVerify(Stack_t *stk);
+StackError_t stackVerify(Stack_t *stk);
 
 /// @brief Wright stack dump is log file
 #define stackDump(stk) stackDumpBase(stk, __FILE__, __LINE__, __PRETTY_FUNCTION__)
@@ -121,38 +127,34 @@ StackError_t stackPushBase(Stack_t *stk, stkElem_t val
 stkElem_t stackPopBase(Stack_t *stk
                 ON_DEBUG(, const char *file, int line, const char *name));
 
-bool stackDumpBase(Stack_t *stk, const char *file, int line, const char *function);
+StackError_t stackDumpBase(Stack_t *stk, const char *file, int line, const char *function);
 
 /* -----------------ASSERTS FOR DEBUGGING-------------------------------------*/
 
 #ifndef NDEBUG
 # define STACK_ASSERT(stk)                                                                              \
     do {                                                                                                \
-        if (!stk) {                                                                                     \
-            logPrintWithTime(L_ZERO, 1, "NULL \"%s\" stack pointer passed\n");                          \
-            MY_ASSERT(0, abort());                                                                      \
-        }                                                                                               \
-        if (!stackVerify(stk)) {                                                                        \
-            logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackFirstErrorToStr(stk->err));  \
+        StackError_t stkError = stackVerify(stk);                                                       \
+        if (stkError) {                                                                                 \
+            logPrintWithTime(L_ZERO, 0, "Stack error occurred: %s\n", stackFirstErrorToStr(stkError));  \
             stackDump(stk);                                                                             \
             MY_ASSERT(0, abort());                                                                      \
         }                                                                                               \
     } while (0)
 
-# define STACK_VERBOSE_ASSERT(stk)                                                                  \
-    do {                                                                                            \
-        if (!stk) {                                                                                 \
-            logPrintWithTime(L_ZERO, 1, "NULL \"%s\" stack pointer passed in %s:%d\n",              \
-                            name, file, line);                                                      \
-            MY_ASSERT(0, abort());                                                                  \
-        }                                                                                           \
-        if (!stackVerify(stk)) {                                                                    \
-            logPrintWithTime(L_ZERO, 1, "Stack \"%s\" error in %s:%d : %s\n",                       \
-                            name, file, line, stackFirstErrorToStr(stk->err));                      \
-            stackDump(stk);                                                                         \
-            MY_ASSERT(0, abort());                                                                  \
-        }                                                                                           \
+//! DO NOT USE THIS MACRO
+//! IT USES LOCAL VARIABLES NAME_, FILE_, LINE_
+# define STACK_VERBOSE_ASSERT(stk)                                                                      \
+    do {                                                                                                \
+        StackError_t stkError = stackVerify(stk);                                                       \
+        if (stkError) {                                                                                 \
+            logPrintWithTime(L_ZERO, 1, "Stack \"%s\" error in %s:%d : %s\n",                           \
+                            NAME_, FILE_, LINE_, stackFirstErrorToStr(stkError));                       \
+            stackDump(stk);                                                                             \
+            MY_ASSERT(0, abort());                                                                      \
+        }                                                                                               \
     } while (0)
+
 #else
 # define STACK_ASSERT(stk)
 # define STACK_VERBOSE_ASSERT(stk)

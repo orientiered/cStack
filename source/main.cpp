@@ -28,9 +28,10 @@ int main(int argc, const char *argv[]) {
 
 void test1() {
     Stack_t stk = {};
-    stackCtor(&stk, 1);
+    stackCtor(&stk, 100);
     stackPush(&stk, 100);
     stackPush(&stk, 200);
+    stackDump(&stk);
     for (int i = 0; i < 100; i++) {
         stackPush(&stk, 5*i);
     }
