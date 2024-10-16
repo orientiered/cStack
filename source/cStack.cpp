@@ -135,7 +135,9 @@ StackError_t stackCtorBase(Stack_t *stk, size_t startCapacity
     stk->initLine = initLine;
     stk->name = name;
     )
+
     stk->size = 0;
+
     MY_ASSERT(startCapacity < MAX_STACK_SIZE, {
         ON_DEBUG(
         logPrint(L_ZERO, 1, "\"%s\" in %s:%d\n", name, initFile, initLine);
@@ -143,6 +145,7 @@ StackError_t stackCtorBase(Stack_t *stk, size_t startCapacity
         logPrint(L_ZERO, 1, "Capacity is too big\n");
         abort();
     });
+
     stk->capacity = startCapacity;
     stk->data = (startCapacity == 0) ?
                 NULL :
@@ -170,7 +173,9 @@ StackError_t stackPushBase(Stack_t *stk, stkElem_t val
 
     logPrintWithTime(L_EXTRA, 0, "Stack_t[%p] push: " STK_ELEM_FMT "\n", stk, val);
     stackChangeSize(stk, OP_PUSH);
+
     stk->data[stk->size-1] = val;
+
     ON_HASH(
     stk->dataHash  = getDataHash(stk);
     stk->stackHash = getStackHash(stk);
@@ -185,7 +190,9 @@ stkElem_t stackPopBase(Stack_t *stk ON_DEBUG(, const char *FILE_, int LINE_, con
     MY_ASSERT((stk->size > 0), abort());
 
     logPrintWithTime(L_EXTRA, 0, "Stack_t[%p] pop: size = %lu, val = " STK_ELEM_FMT "\n",stk, stk->size, stk->data[stk->size-1]);
-    stkElem_t val = stk->data[stk->size-1];
+
+    stkElem_t val = stk->data[stk->size - 1];
+
     stackChangeSize(stk, OP_POP);
     ON_HASH(
     stk->dataHash  = getDataHash(stk);
@@ -268,17 +275,7 @@ static bool stackDumpErr(StackError_t err) {
     logErr(err, ERR_HASH_DATA);
     logErr(err, ERR_HASH_STACK);
     )
-    // logPrint(L_ZERO, 0, "\t\tERR_SIZE       = %u\n", (bool) (stk->err & ERR_SIZE));
-    // logPrint(L_ZERO, 0, "\t\tERR_DATA       = %u\n", (bool) (stk->err & ERR_DATA));
-    // logPrint(L_ZERO, 0, "\t\tERR_CAPACITY   = %u\n", (bool) (stk->err & ERR_CAPACITY));
-    // logPrint(L_ZERO, 0, "\t\tERR_LOGIC      = %u\n", (bool) (stk->err & ERR_LOGIC));
-    // ON_CANARY(
-    // logPrint(L_ZERO, 0, "\t\tERR_CANARY     = %u\n", (bool) (stk->err & ERR_CANARY));
-    // )
-    // ON_HASH(
-    // logPrint(L_ZERO, 0, "\t\tERR_HASH_DATA  = %u\n", (bool) (stk->err & ERR_HASH_DATA));
-    // logPrint(L_ZERO, 0, "\t\tERR_HASH_STACK = %u\n", (bool) (stk->err & ERR_HASH_STACK));
-    // )
+
     logPrint(L_ZERO, 0, "\t}\n");
     return true;
 }

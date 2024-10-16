@@ -22,10 +22,10 @@ enum status logClose();
 void setLogLevel(enum LogLevel level);
 
 /// @brief Print in log file with time signature
-enum status logPrintWithTime(enum LogLevel level, bool copyToStderr, const char* fmt, ...);
+enum status logPrintWithTime(enum LogLevel level, bool copyToStderr, const char* fmt, ...) __attribute__( (format( printf, 3, 4 ) ) );
 
 /// @brief Print in log file
-enum status logPrint(enum LogLevel level, bool copyToStderr, const char* fmt, ...);
+enum status logPrint(enum LogLevel level, bool copyToStderr, const char* fmt, ...) __attribute__( (format( printf, 3, 4 ) ) );
 
 /// @brief Print in log file with place in code
 #define LOG_PRINT(level, ...)                                                                       \
